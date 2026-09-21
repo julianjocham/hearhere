@@ -8,9 +8,8 @@ pass fakes for the ASR / diarization / summarizer engines to
 summary are config-gated and fail soft — if the engine is unavailable the
 pipeline logs a warning and continues (undiarized / unsummarized).
 
-With ``compute.backend = "remote"`` the compute stages run on a remote worker
-instead: both WAVs are uploaded, the worker returns a finished ``meeting.json``,
-and only the exports happen locally.
+Everything runs on this machine: HearHere has no remote/offload path, and no
+stage ever sends audio off the box.
 """
 
 from __future__ import annotations
@@ -118,13 +117,9 @@ def process_meeting(
 
     handler = add_meeting_file_handler(paths.root)
     try:
-        if config.compute.backend == "remote" and asr is None:
-            # Offload the whole pipeline to a remote worker; exports stay local.
-            meeting = _process_remote(paths, config, title=title)
-        else:
-            meeting = _process_local(
-                paths, config, asr, diarizer, summarizer, title=title
-            )
+        meeting = _process_local(
+            paths, config, asr, diarizer, summarizer, title=title
+        )
 
         artifacts.write_meeting(paths, meeting)
         written = export_meeting(paths, meeting, config.export.formats)
@@ -164,34 +159,6 @@ def _process_local(
     transcript = merge_segments(self_segs, others_segs, language=language)
     summary = _summarize(config, transcript, summarizer)
     return _build_meeting(paths, transcript, title=title, summary=summary)
-
-
-def _process_remote(
-    paths: MeetingPaths, config: Config, *, title: str | None
-) -> Meeting:
-    """Upload both channels to the remote worker and download the meeting.
-
-    The worker runs ASR + diarization + summary; only exports happen locally.
-    The privacy warning is logged by the client on every upload — the CLI adds
-    an interactive confirmation before the first one.
-    """
-    from ..remote.client import RemoteClient  # noqa: PLC0415
-
-    remote = config.compute.remote
-    client = RemoteClient(remote.url, token=remote.token)
-    language = _resolve_language(config)
-    log.info("Processing meeting remotely via %s", remote.url)
-    meeting = client.process(
-        paths.self_wav,
-        paths.others_wav,
-        title=title,
-        language=language,
-        on_status=lambda s: log.info("Remote job %s: %s", s.id, s.state),
-    )
-    # Re-anchor the remote result to this local meeting folder.
-    return meeting.model_copy(
-        update={"id": paths.root.name, "title": title or meeting.title}
-    )
 
 
 def _diarize_others(

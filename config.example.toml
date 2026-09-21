@@ -7,19 +7,14 @@ language = "auto"          # "auto" | "en" | "de" | any of the 25 supported code
 storage_dir = "~/HearHere" # where meeting artifacts are written
 
 [compute]
-backend = "local"          # "local" | "remote"
-device  = "auto"           # "auto" | "cpu" | "cuda" | "mps"
-
-[compute.remote]
-url = "https://<your-runpod-host>:8808"
-token = ""                  # bearer token for the worker; or set HEARHERE_REMOTE_TOKEN
-# WARNING: with backend="remote", audio is uploaded to this host. HearHere warns
-# on every remote run and asks for confirmation before the first upload.
+# Everything runs on this machine — there is no cloud or offload mode.
+device = "auto"            # "auto" | "cpu" | "cuda" | "mps"
 
 [capture]
 # Device selection; "default" uses the OS default devices.
 # Run `hearhere devices` to list the exact names this platform accepts.
-mic_device    = "default"
+mic_device    = "default"   # Linux: "none" records system output only, for a
+                            # box with no capture hardware at all.
 # The system-output ("others") device. On Windows this is the render device
 # whose WASAPI loopback is captured; on Linux it's the sink whose ".monitor"
 # source is captured (name the sink, e.g. "sof-soundwire Headphones", not the
@@ -50,5 +45,5 @@ tasks   = ["summary", "action_items", "decisions"]
 formats = ["markdown", "json", "srt"]  # any of: markdown, text, json, srt, vtt
 
 # The local web UI (`hearhere ui`) reads meetings from [general].storage_dir and
-# uses [export].formats as the default export set. It never records or uploads
-# audio. Needs the [webui] extra: pip install "hearhere[webui]".
+# uses [export].formats as the default export set. It binds loopback, never
+# records, and never uploads. Needs the [webui] extra: pip install "hearhere[webui]".

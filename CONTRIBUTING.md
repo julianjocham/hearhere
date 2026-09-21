@@ -9,7 +9,7 @@ bug reports, and pull requests are all welcome.
 git clone https://github.com/julianjocham/hearhere.git
 cd hearhere
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[remote,webui,dev]"
+pip install -e ".[webui,dev]"
 pytest
 ```
 
@@ -18,9 +18,9 @@ tested against, and the one the ML dependencies (NeMo, PyTorch) are known to
 work on. The test suite also runs on 3.10–3.13 in CI.
 
 That install is deliberately light: it's enough to run the **entire** test suite
-without downloading a single model. The heavy extras (`asr`, `diarization`,
-`capture`) pull in torch, NeMo and host audio libraries, and you only need them
-if you're changing those engines specifically.
+(121 tests) without downloading a single model. The heavy extras (`asr`,
+`diarization`, `capture`) pull in torch, NeMo and host audio libraries, and you
+only need them if you're changing those engines specifically.
 
 ## Running the tests
 
@@ -62,6 +62,11 @@ logs a warning and continues with a plain transcript rather than crashing. Keep
 new optional stages in that spirit — but let genuine capture failures fail
 *loudly*, so nobody ends up with a silently empty recording.
 
+**HearHere is local-only.** There is no code path that sends audio, transcripts
+or telemetry anywhere, and there shouldn't be — the only network access is the
+one-time model downloads. Please don't add an upload path: if a stage needs more
+compute, the answer is a local device, not a remote one.
+
 **`meeting.json` is the source of truth.** Every export format is derived from
 it, which is why re-exporting never re-runs a model. Don't add an export path
 that reaches back to the audio.
@@ -86,13 +91,14 @@ module exists, and comments only where the reasoning isn't obvious from the code
 
 ## Platform notes
 
-Recording is **Windows-only** right now (WASAPI loopback). macOS (BlackHole or a
-similar virtual device) and Linux (PipeWire/PulseAudio monitor source) capture
-are the biggest open items — see [TODO.md](TODO.md). Everything except recording
-is cross-platform today.
+Recording works on **Windows** (WASAPI loopback) and **Linux**
+(PipeWire/PulseAudio sink monitor). **macOS capture** — BlackHole or a similar
+virtual device — is the biggest open item; see [TODO.md](TODO.md). Everything
+except recording is cross-platform today.
 
 Audio capture can't be tested in CI, and WSL2 has no direct audio access, so
-capture changes need a real host OS to verify.
+capture changes need a real host OS to verify. Say which OS and which devices you
+tested on.
 
 ## Privacy
 

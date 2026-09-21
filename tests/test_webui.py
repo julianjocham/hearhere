@@ -1,4 +1,4 @@
-"""Batch 7 tests: local web UI service core + HTTP API + frontend.
+"""Batch 6 tests: local web UI service core + HTTP API + frontend.
 
 The service core is exercised directly (no web stack); the FastAPI app is driven
 in-process with Starlette's ``TestClient``. Covers the "done when": review,

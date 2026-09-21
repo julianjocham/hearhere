@@ -15,7 +15,6 @@ EXAMPLE = Path(__file__).resolve().parents[1] / "config.example.toml"
 def test_defaults_are_valid():
     cfg = Config()
     assert cfg.general.language == "auto"
-    assert cfg.compute.backend == "local"
     assert cfg.compute.device == "auto"
     assert cfg.capture.sample_rate == 16000
     assert cfg.asr.model == "nvidia/parakeet-tdt-0.6b-v3"
@@ -39,7 +38,7 @@ def test_example_config_loads_and_matches_defaults():
     # The example file documents the defaults; storage_dir is expanded.
     assert cfg.general.storage_dir == (Path("~/HearHere").expanduser())
     assert cfg.export.formats == ["markdown", "json", "srt"]
-    assert cfg.compute.remote.url.startswith("https://")
+    assert cfg.compute.device == "auto"
 
 
 def test_storage_dir_is_expanded():

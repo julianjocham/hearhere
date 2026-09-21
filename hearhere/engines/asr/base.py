@@ -1,8 +1,9 @@
 """The ``ASREngine`` interface and engine factory.
 
 An ASR engine turns a 16 kHz mono WAV into time-stamped :class:`Segment`s. The
-protocol is deliberately small so backends (local NeMo, a remote worker) can be
-swapped via config without touching the pipeline.
+protocol is deliberately small so backends can be swapped via config without
+touching the pipeline. Engines run locally — HearHere never ships audio off the
+machine.
 """
 
 from __future__ import annotations
@@ -47,11 +48,5 @@ def create_asr_engine(config: "Config", device: str | None = None) -> ASREngine:
             model_name=config.asr.model,
             device=resolved,
             timestamps=config.asr.timestamps,
-        )
-    if name == "remote":
-        from .remote import RemoteASREngine  # noqa: PLC0415
-
-        return RemoteASREngine(
-            config.compute.remote.url, token=config.compute.remote.token
         )
     raise ValueError(f"Unknown ASR engine {name!r}.")

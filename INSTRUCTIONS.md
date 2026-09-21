@@ -2,11 +2,18 @@
 
 How to install and run HearHere on each operating system.
 
-> **Platform status.** Recording currently works on **Windows only** — it's the
-> priority-1 platform. macOS and Linux capture are not implemented yet (see
-> [`TODO.md`](TODO.md) for what's planned). Everything *except*
-> recording — processing an existing recording, the web UI, exports, and the
-> remote backend — is cross-platform today.
+> **Platform status.** Recording works on **Windows** (WASAPI loopback) and
+> **Linux** (PipeWire/PulseAudio sink monitor). **macOS capture is not
+> implemented yet** (see [`TODO.md`](TODO.md)); everything *except* recording —
+> processing an existing recording, the web UI, exports — works there today.
+>
+> **Everything runs locally.** HearHere has no cloud mode and no upload path; the
+> only network access is the one-time model downloads.
+
+- [Windows](#windows--step-by-step-from-a-cloned-repo)
+- [Linux](#linux--step-by-step-from-a-cloned-repo)
+- [macOS](#macos-recording-not-yet-supported)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -255,6 +262,119 @@ hearhere ui
 
 ---
 
+## Linux — step by step from a cloned repo
+
+Recording on Linux captures the **`.monitor` source of your audio sink** — the
+native PipeWire/PulseAudio loopback of exactly what you hear. No virtual cable,
+no extra software, nothing to install beyond a system library.
+
+> **Heads-up:** the capture path is verified on real PipeWire hardware (a tone
+> played to the default sink lands on the `others` channel at the expected
+> amplitude, mic on `self`, both written as 16 kHz mono WAV). The
+> [Troubleshooting](#troubleshooting) section covers the device-selection traps.
+
+### Step 1 — System prerequisites
+
+You need Python 3.10+ (**3.12 recommended**), a running **PipeWire** (or
+PulseAudio) session, and the system **libpulse** library — `soundcard` talks to
+PulseAudio directly rather than going through PortAudio:
+
+```bash
+sudo apt install python3-venv libpulse0     # Debian / Ubuntu
+# Fedora:  sudo dnf install python3-virtualenv pulseaudio-libs
+# Arch:    sudo pacman -S libpulse
+```
+
+Check that a sound server is actually running:
+
+```bash
+pactl info      # should print a Server Name like "PulseAudio (on PipeWire …)"
+```
+
+### Step 2 — Create a venv and install
+
+```bash
+cd ~/hearhere                                  # wherever you cloned it
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+
+# Minimum to record and get a transcript:
+pip install -e ".[capture,asr]"
+
+# Or everything — speaker names, summaries, and the browser UI:
+pip install -e ".[capture,asr,diarization,llm,webui]"
+```
+
+`asr` pulls in PyTorch and NeMo, which are large; give it time. Then:
+
+```bash
+hearhere --version
+hearhere --help
+```
+
+**GPU note.** pip installs the **CPU** build of PyTorch by default. On an NVIDIA
+machine, install a CUDA build *before* the line above (check your CUDA version at
+[pytorch.org](https://pytorch.org/get-started/locally/)):
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+### Step 3 — (Optional) speaker names and summaries
+
+Identical to Windows [Step 5](#step-5--optional-set-up-speaker-names-and-summaries):
+a Hugging Face token for pyannote (`export HF_TOKEN="hf_…"`), and Ollama plus
+`[llm].enabled = true` for summaries. Both fail soft — without them you still get
+a plain transcript.
+
+### Step 4 — Pick your devices
+
+This is the step worth doing before your first real meeting:
+
+```bash
+hearhere devices
+```
+
+On Linux this lists PulseAudio/PipeWire **sources** (for `[capture].mic_device`)
+and **sinks** (for `[capture].output_device`). Two things to know:
+
+- For `output_device`, name the **sink**, not the monitor — e.g.
+  `"sof-soundwire Headphones"`, not `"…​.monitor"`. HearHere appends `.monitor`
+  itself and refuses to continue if what it resolved isn't a real loopback
+  source, so it can never record your microphone into `others.wav` by accident.
+- If the machine has **no microphone at all** (an HDMI-only desktop, a VM), set
+  `mic_device = "none"` to record system output alone rather than fail.
+
+Copy the names into `config.toml`:
+
+```bash
+cp config.example.toml config.toml
+$EDITOR config.toml
+```
+
+### Step 5 — Record
+
+```bash
+hearhere record --title "Weekly Sync"
+hearhere record --title "Weekly Sync" --language de   # pin the language
+```
+
+It records your mic into `self` and the sink monitor into `others`, prints
+`Recording… press Enter to stop.`, and runs the pipeline when you press Enter.
+**The first run downloads the Parakeet model (~2 GB).**
+
+Results land in `~/HearHere/<date>_<title>/` — same layout as
+[Step 8](#step-8--look-at-the-results) on Windows. Review them in the browser
+with `hearhere ui` (<http://127.0.0.1:8809>), or re-export with
+`hearhere export <folder> --format md,srt,vtt`.
+
+> **WSL2 note:** WSL2 has no direct audio device access, so you cannot record
+> from it — the `others` channel would be silent. Record on the host OS; WSL2 is
+> fine as a dev environment for everything else.
+
+---
+
 ## macOS (recording not yet supported)
 
 Recording on macOS is **not implemented yet** — it will arrive via BlackHole or
@@ -267,7 +387,6 @@ What already works on macOS today:
 - **Process a recording made elsewhere** — drop a meeting folder with
   `audio/self.wav` + `audio/others.wav` under your `storage_dir` and run
   `pip install ".[asr,diarization,llm]"` + `hearhere process <folder>`.
-- **Use a remote GPU worker** — see [Remote backend](#remote-backend-any-os).
 
 Installation is the same as Windows minus the `capture` extra:
 
@@ -276,55 +395,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install ".[asr,diarization,llm,webui]"
 ```
-
----
-
-## Linux (recording not yet supported)
-
-Recording on Linux is **not implemented yet** — it will arrive via a
-PipeWire/PulseAudio `.monitor` source. Until then, `hearhere record` tells you
-so instead of failing obscurely.
-
-> **WSL2 note:** WSL2 has no direct audio access — you can't record from it even
-> once Linux capture lands. Record on the host OS.
-
-Everything except recording works, exactly as described for macOS above:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install ".[asr,diarization,llm,webui]"
-hearhere ui        # review meetings in the browser
-```
-
----
-
-## Remote backend (any OS)
-
-If your laptop is too slow and you have a rented GPU box (e.g. RunPod), you can
-offload processing. **Audio leaves your machine in this mode** — HearHere warns
-you and asks for confirmation before the first upload.
-
-On the **GPU host**, run the worker:
-
-```bash
-pip install ".[remote,asr,diarization,llm]"
-hearhere worker --host 0.0.0.0 --port 8808
-```
-
-On your **laptop**, point the config at it and switch the backend:
-
-```toml
-[compute]
-backend = "remote"
-
-[compute.remote]
-url   = "https://<your-gpu-host>:8808"
-token = ""   # or set HEARHERE_REMOTE_TOKEN
-```
-
-Then `hearhere record` / `hearhere process` run the pipeline remotely and pull
-the finished meeting back; exports still happen locally.
 
 ---
 
@@ -359,8 +429,31 @@ the finished meeting back; exports still happen locally.
 - **`UserWarning: … does not support symlinks` (Hugging Face cache)** — harmless;
   the model still downloads. To silence it, enable Windows *Developer Mode*
   (Settings → Privacy & security → For developers) so the cache can use symlinks.
-- **`'record' is not implemented` on macOS/Linux** — expected; recording is
-  Windows-only for now. Everything else works on those platforms.
+- **`macOS audio capture is not implemented yet`** — expected; recording works
+  on Windows and Linux. Everything else works on macOS.
+
+**Linux only:**
+
+- **`Could not open the … device (OSError: …)`** — usually no `libpulse`
+  (`sudo apt install libpulse0`) or no sound server. Confirm with `pactl info`;
+  on a headless box start `pipewire-pulse` (or `pulseaudio`) first.
+- **`The default input source (… ) is a loopback monitor of system output`** —
+  your default PulseAudio source is a sink monitor, so recording it as `self.wav`
+  would just duplicate `others.wav`. Set `[capture].mic_device` to a real input
+  (`hearhere devices`), or `"none"` if the machine genuinely has no microphone.
+- **`No microphone/output device matches [capture] device '…'`** — the name in
+  `config.toml` didn't match anything; HearHere refuses the fuzzy near-match
+  rather than silently recording the wrong device. Copy an exact name from
+  `hearhere devices`.
+- **`Resolved … as the system-output monitor, but it is not a loopback source`** —
+  the named sink has no monitor source. Pick another sink for
+  `[capture].output_device`.
+- **`others.wav` is silent** — nothing was playing to the sink you captured, or
+  the app is on a different sink. Check the per-app routing in `pavucontrol` and
+  set `[capture].output_device` to the sink the meeting app actually uses.
+- **`Capture thread … did not stop within 5s`** — a device wedged (a yanked USB
+  headset, typically). HearHere keeps whatever it captured; process the folder
+  and re-record if it's short.
 - **`The web UI needs the '[webui]' extra`** — run `pip install ".[webui]"`.
 - **Diarization is skipped** — set a Hugging Face token (`HF_TOKEN`) and accept
   the pyannote model license; the pipeline fails soft and continues unlabeled.
@@ -370,4 +463,5 @@ the finished meeting back; exports still happen locally.
 - **Transcript switches language** — pin it with `--language de` (or set
   `[general].language`); auto-detection can flip mid-clip.
 - **Slow transcription** — Parakeet runs on CPU but is much faster on a CUDA
-  GPU; set `[compute].device = "cuda"` or leave it on `auto`.
+  GPU; set `[compute].device = "cuda"` or leave it on `auto`. There is
+  deliberately no cloud/offload option — a local GPU is the fix.

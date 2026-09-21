@@ -23,7 +23,6 @@ except ModuleNotFoundError:  # pragma: no cover
 CONFIG_FILENAME = "config.toml"
 
 Language = str  # "auto" | "en" | "de" | any of the 25 supported codes
-Backend = Literal["local", "remote"]
 Device = Literal["auto", "cpu", "cuda", "mps"]
 Timestamps = Literal["segment", "word", "char"]
 ExportFormat = Literal["markdown", "text", "json", "srt", "vtt"]
@@ -44,15 +43,10 @@ class GeneralConfig(BaseModel):
         return v
 
 
-class RemoteConfig(BaseModel):
-    url: str = "https://<your-runpod-host>:8808"
-    token: str = ""  # bearer token for the worker; or set HEARHERE_REMOTE_TOKEN
-
-
 class ComputeConfig(BaseModel):
-    backend: Backend = "local"
+    # HearHere runs everything on this machine; the only choice is which local
+    # device the models land on.
     device: Device = "auto"
-    remote: RemoteConfig = Field(default_factory=RemoteConfig)
 
 
 class CaptureConfig(BaseModel):
@@ -136,10 +130,6 @@ class Config(BaseModel):
             token = os.environ.get("HF_TOKEN", "")
             if token:
                 self.diarization.hf_token = token
-        if not self.compute.remote.token:
-            token = os.environ.get("HEARHERE_REMOTE_TOKEN", "")
-            if token:
-                self.compute.remote.token = token
         return self
 
 

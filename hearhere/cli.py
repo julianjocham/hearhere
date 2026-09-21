@@ -1,9 +1,9 @@
 """HearHere command-line interface.
 
 ``record``/``process``/``export``/``list`` run the core pipeline (Batch 1);
-``speakers`` renames diarized speakers (Batch 2); ``worker`` serves the remote
-backend and ``record``/``process`` can offload to it (Batch 5); ``ui`` serves
-the local web UI for reviewing past meetings in the browser (Batch 7).
+``speakers`` renames diarized speakers (Batch 2); ``ui`` serves the local web UI
+for reviewing past meetings in the browser (Batch 6). Every command runs
+entirely on this machine.
 """
 
 from __future__ import annotations
@@ -84,9 +84,6 @@ def record(
         False, "--no-process", help="Record only; skip the transcribe step."
     ),
     language: Optional[str] = LanguageOpt,
-    yes: bool = typer.Option(
-        False, "--yes", "-y", help="Skip the remote-upload confirmation prompt."
-    ),
     config: Optional[str] = ConfigOpt,
 ) -> None:
     """Record mic + system output until stopped, then run the pipeline."""
@@ -108,19 +105,12 @@ def record(
     if no_process:
         typer.echo(f"Run: hearhere process {paths.root}")
         return
-    _ensure_remote_consent(cfg, assume_yes=yes)
     try:
         meeting = process_meeting(paths.root, cfg, title=title)
     except MissingExtraError as exc:
         typer.echo(f"Recorded, but not processed. {exc}", err=True)
         typer.echo(f"Once installed, run: hearhere process {paths.root}", err=True)
         raise typer.Exit(1)
-    except Exception as exc:  # noqa: BLE001 - surface remote failures cleanly
-        if cfg.compute.backend != "remote":
-            raise
-        raise typer.Exit(  # type: ignore[func-returns-value]
-            typer.echo(f"Remote processing failed: {exc}", err=True) or 1
-        )
     typer.echo(f"Processed {len(meeting.transcript.segments)} segment(s) -> {paths.root}")
 
 
@@ -128,26 +118,16 @@ def record(
 def process(
     meeting_dir: Path = typer.Argument(..., help="Path to a recorded meeting folder."),
     language: Optional[str] = LanguageOpt,
-    yes: bool = typer.Option(
-        False, "--yes", "-y", help="Skip the remote-upload confirmation prompt."
-    ),
     config: Optional[str] = ConfigOpt,
 ) -> None:
     """Run the pipeline on an already-recorded meeting folder."""
     from hearhere.pipeline.orchestrator import process_meeting
 
     cfg = _with_language(load_config(config), language)
-    _ensure_remote_consent(cfg, assume_yes=yes)
     try:
         meeting = process_meeting(meeting_dir, cfg)
     except (FileNotFoundError, MissingExtraError) as exc:
         raise typer.Exit(typer.echo(str(exc), err=True) or 1)  # type: ignore[func-returns-value]
-    except Exception as exc:  # noqa: BLE001 - surface remote failures cleanly
-        if cfg.compute.backend != "remote":
-            raise
-        raise typer.Exit(  # type: ignore[func-returns-value]
-            typer.echo(f"Remote processing failed: {exc}", err=True) or 1
-        )
     typer.echo(
         f"Transcribed {len(meeting.transcript.segments)} segment(s); "
         f"speakers: {', '.join(meeting.speakers) or '—'}"
@@ -300,29 +280,6 @@ def _devices_default() -> None:
 
 
 @app.command()
-def worker(
-    host: str = typer.Option("0.0.0.0", help="Bind host."),
-    port: int = typer.Option(8808, help="Bind port."),
-    config: Optional[str] = ConfigOpt,
-) -> None:
-    """Run the remote HearHere worker (serves the remote backend)."""
-    cfg = load_config(config)
-    try:
-        from hearhere.remote.worker import run_worker
-    except ModuleNotFoundError as exc:  # missing [remote] extra
-        raise typer.Exit(  # type: ignore[func-returns-value]
-            typer.echo(
-                f"The remote worker needs the '[remote]' extra: {exc}. "
-                'Install with: pip install "hearhere[remote]".',
-                err=True,
-            )
-            or 1
-        )
-    typer.echo(f"HearHere worker listening on {host}:{port}")
-    run_worker(cfg, host=host, port=port)
-
-
-@app.command()
 def ui(
     host: str = typer.Option("127.0.0.1", help="Bind host (loopback by default)."),
     port: int = typer.Option(8809, help="Bind port."),
@@ -343,28 +300,6 @@ def ui(
         )
     typer.echo(f"HearHere web UI on http://{host}:{port} (meetings from {cfg.general.storage_dir})")
     run_ui(cfg, host=host, port=port)
-
-
-def _ensure_remote_consent(cfg, assume_yes: bool) -> None:
-    """Warn (and confirm before the first upload) when using the remote backend.
-
-    HearHere is local-first; the remote backend uploads audio, so we surface the
-    warning on every remote run and require an explicit confirmation the first
-    time (remembered thereafter). ``--yes`` records consent without prompting.
-    """
-    if cfg.compute.backend != "remote":
-        return
-    from hearhere.remote import consent
-    from hearhere.remote.protocol import upload_warning
-
-    typer.echo(upload_warning(cfg.compute.remote.url), err=True)
-    if consent.has_consent():
-        return
-    if not assume_yes and not typer.confirm(
-        "Continue and upload audio to the remote worker?"
-    ):
-        raise typer.Exit(typer.echo("Aborted; audio not uploaded.", err=True) or 1)  # type: ignore[func-returns-value]
-    consent.record_consent(cfg.compute.remote.url)
 
 
 if __name__ == "__main__":  # pragma: no cover

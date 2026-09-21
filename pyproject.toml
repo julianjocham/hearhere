@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hearhere"
 version = "0.0.1"
-description = "A fully local, dual-channel meeting transcriber (mic + system output) with speaker attribution and local-LLM summaries."
+description = "A fully local, dual-channel meeting transcriber (mic + system output) with speaker attribution and local-LLM summaries. No cloud, no uploads."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -27,7 +27,7 @@ asr = [            # Batch 1: Parakeet ASR via NeMo
     "torch>=2.2",
     "soundfile>=0.12",
 ]
-capture = [        # Batch 1 (Windows) / 3 / 4: dual-channel audio capture
+capture = [        # Batch 1 (Windows) / 4 (Linux): dual-channel audio capture
     "soundcard>=0.4.3",
     "sounddevice>=0.4.6",
     "soundfile>=0.12",
@@ -40,13 +40,7 @@ diarization = [    # Batch 2: pyannote.audio speaker diarization
 llm = [            # Batch 2: local summarization via Ollama
     "ollama>=0.3",
 ]
-remote = [         # Batch 5: remote worker (server) + client
-    "fastapi>=0.110",
-    "uvicorn>=0.29",
-    "httpx>=0.27",
-    "python-multipart>=0.0.9",
-]
-webui = [          # Batch 7: local web UI (browse/review/re-export in the browser)
+webui = [          # Batch 6: local web UI (browse/review/re-export in the browser)
     "fastapi>=0.110",
     "uvicorn>=0.29",
 ]
@@ -56,6 +50,8 @@ dev = [
     # stop()/WAV-writing regression guards silently skip in CI.
     "numpy>=1.24",
     "soundfile>=0.12",
+    # Starlette's TestClient (used by the web-UI tests) is built on httpx.
+    "httpx>=0.27",
     "pytest>=8.0",
 ]
 

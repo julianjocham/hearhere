@@ -1,4 +1,4 @@
-"""Local web UI for reviewing past meetings (Batch 7).
+"""Local web UI for reviewing past meetings (Batch 6).
 
 HearHere is local-first; this UI is a convenience for browsing the meetings
 already on disk — it never records or uploads audio. Two layers live here:

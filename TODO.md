@@ -4,12 +4,16 @@ Ordered, batchable implementation plan. Each **Batch** is a self-contained unit 
 
 Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an explicit "done when" test.
 
+**Where things stand:** recording works on **Windows** and **Linux**; **macOS
+capture (Batch 3) is the only open platform.** Everything runs on the user's own
+machine — there is no remote/offload path anywhere in the plan.
+
 ---
 
 ## Batch 0 — Project scaffold 🎯 *repo builds & imports*
 
 - [x] Create `pyproject.toml` (Python 3.10+, deps as placeholders, `hearhere` console entry point → `hearhere.cli:app`).
-- [x] Create package skeleton matching the README structure (`hearhere/`, `capture/`, `engines/`, `pipeline/`, `export/`, `llm/`, `remote/`, `tests/`).
+- [x] Create package skeleton matching the README structure (`hearhere/`, `capture/`, `engines/`, `pipeline/`, `export/`, `llm/`, `tests/`).
 - [x] `config.py`: pydantic schema for the full `config.toml`; loader (cwd → `~/.config/hearhere/`); sensible defaults.
 - [x] `config.example.toml` matching the README.
 - [x] Define core data models: `Segment`, `SpeakerTurn`, `Transcript`, `Summary`, `Meeting` (the `meeting.json` shape).
@@ -30,7 +34,7 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 - [x] `pipeline/orchestrator.py`: capture → ASR(self) → ASR(others) → merge → write `meeting.json`.
 - [x] `export/markdown.py`, `export/json.py`, `export/subtitles.py` (SRT), `export/text.py`.
 - [x] `cli.py`: `record`, `process`, `export`, `list`.
-- [x] 🧪 Record a short meeting on Windows → get `transcript.md` with Me/Others segments; re-export works without re-running models. *(Pipeline + re-export verified by tests on a WSL2 dev box with a fake ASR engine; on-Windows live capture still to be run on real hardware — WSL2 has no audio.)*
+- [x] 🧪 Record a short meeting on Windows → get `transcript.md` with Me/Others segments; re-export works without re-running models. *(Pipeline + re-export verified by tests with a fake ASR engine; the live record → transcribe path has since been run end to end on real Windows audio hardware on two machines — see the "Robust Windows capture backend" item below.)*
 
 ---
 
@@ -49,7 +53,7 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 
 ---
 
-## Batch 3 — macOS support ⛓️ (Phase 3)
+## Batch 3 — macOS support ⛓️ (Phase 3) — **the only open platform**
 
 - [ ] `capture/macos.py`: mic + system output via BlackHole/virtual device.
 - [ ] Setup docs: Multi-Output Device + BlackHole install steps (link from README).
@@ -58,7 +62,7 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 
 ---
 
-## Batch 4 — Linux support ⛓️ (Phase 4)
+## Batch 4 — Linux support ✅ *done* ⛓️ (Phase 4)
 
 - [x] `capture/linux.py`: mic + default-sink `.monitor` capture via PipeWire/PulseAudio. *(Both channels go through `soundcard` (libpulse), which enumerates each sink's monitor as a loopback source — symmetric with, and simpler than, the Windows split. `create_audio_capture` now dispatches Linux to `LinuxCapture`.)*
 - [x] Device discovery/selection for non-default devices. *(`hearhere devices` is now platform-aware: on Linux it lists soundcard sources + sinks — the names `[capture].mic_device` / `output_device` actually accept — instead of sounddevice's raw ALSA `hw:` names.)*
@@ -66,17 +70,7 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 
 ---
 
-## Batch 5 — Remote backend (RunPod) ⛓️ (Phase 5)
-
-- [x] `remote/worker.py`: FastAPI worker running the pipeline in "worker mode"; accepts two WAVs, returns artifacts. *(Pure `JobManager` core — testable without the web stack — behind a lazily-imported `create_app`/`run_worker`; async job API: `POST /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/result`, plus `GET /health` and ASR-only `POST /transcribe`. Worker always runs `backend="local"`.)*
-- [x] `engines/asr/remote.py` (+ remote pipeline client): upload `self.wav`/`others.wav`, poll, download results. *(`RemoteClient` in `remote/client.py` does submit→poll→download for the full pipeline; `RemoteASREngine` is the per-channel ASR-only path wired into `create_asr_engine` via `asr.engine="remote"`. Shared contract in `remote/protocol.py`.)*
-- [x] Config: `backend = "remote"`, `remote.url`; **explicit warning + confirmation before first upload**. *(Orchestrator gains a remote branch — uploads both WAVs, re-anchors the returned meeting to the local folder, exports locally. Client logs the leaving-your-machine warning on every upload; CLI (`record`/`process`) shows it and prompts for confirmation before the first upload, remembering consent in `~/.config/hearhere/.remote_upload_consent`; `--yes` skips the prompt.)*
-- [x] Auth/token handling for the remote endpoint. *(Bearer token: `compute.remote.token` or `HEARHERE_REMOTE_TOKEN` env; gates every worker endpoint except `/health`; empty token = open worker with a logged warning.)*
-- [x] 🧪 Point a laptop at a remote worker; full meeting processed remotely with the leaving-your-machine warning shown. *(Verified by 13 tests — worker `JobManager`, HTTP round-trips via Starlette `TestClient`, auth/404/409, ASR-over-HTTP, orchestrator remote branch, consent — plus a live uvicorn worker + real-httpx client smoke over a real socket: distinct speakers + summary returned, warning shown, bad token rejected. Uses fake ASR/diarizer/summarizer engines on the WSL2 dev box; a real GPU worker needs `pip install "hearhere[remote,asr,diarization,llm]"`.)*
-
----
-
-## Batch 6 — Additional engines & formats *(optional, parallelizable)*
+## Batch 5 — Additional engines & formats *(optional, parallelizable)*
 
 - [ ] `engines/llm/llamacpp.py` (GGUF via llama.cpp) as an Ollama alternative.
 - [x] Export: WebVTT (`vtt`).
@@ -85,7 +79,7 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 
 ---
 
-## Batch 7 — Local web UI ⛓️ (Phase 6)
+## Batch 6 — Local web UI ⛓️ (Phase 5)
 
 - [x] FastAPI backend: list meetings, read `meeting.json`, trigger re-export, rename speakers. *(Pure `WebUIService` core in `hearhere/webui/service.py` — testable without the web stack — delegates to `artifacts`, `export_meeting`, and `rename_speakers`. Thin FastAPI wrapper in `webui/server.py` (lazily imported): `GET /api/meetings`, `GET /api/meetings/{id}`, `POST /api/meetings/{id}/export`, `POST /api/meetings/{id}/speakers`, `GET /api/meetings/{id}/exports/{filename}`. Meeting ids are validated against path traversal — must sit directly under `storage_dir`. Read-only w.r.t. audio: the UI never records or uploads.)*
 - [x] Browser frontend: browse past meetings, view transcript + summary, rename speakers inline, export. *(Single self-contained `webui/static/index.html` — vanilla JS, no CDN/build step, light+dark. Master-detail: meeting list on the left; transcript (Me/Speaker colour-coded), summary/decisions/action-items, inline speaker-rename inputs, and per-format export checkboxes + download links on the right. Served at `/` by the FastAPI app; launched with `hearhere ui` (loopback `127.0.0.1:8809` by default).)*
@@ -96,8 +90,8 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 
 ## Cross-cutting (do alongside, not a blocking batch)
 
-- [x] Tests per batch (unit for merge/align/config/export; smoke tests for capture where feasible). *(116 tests, no network or model downloads.)*
-- [ ] Error handling: missing devices, no model, no GPU, Ollama/pyannote unavailable. *(Partly done: capture now fails loudly with an actionable `CaptureError` when a channel's recorder crashes, and ASR skips empty/near-silent WAVs instead of crashing NeMo — found on real Windows hardware 2026-09-13.)*
+- [x] Tests per batch (unit for merge/align/config/export; smoke tests for capture where feasible). *(121 tests, no network or model downloads.)*
+- [ ] Error handling: missing devices, no model, no GPU, Ollama/pyannote unavailable. *(Partly done: capture now fails loudly with an actionable `CaptureError` when a channel's recorder crashes — and carries the meeting folder out with it so a one-channel failure leaves the healthy channel salvageable — and ASR skips empty/near-silent WAVs instead of crashing NeMo. Found on real Windows hardware 2026-09-13.)*
 - [x] **Long-audio transcription.** A single NeMo `transcribe` call truncated long audio (cut off ~32 s of a 46 s clip on real hardware 2026-09-13). Fixed: audio longer than `_CHUNK_SECONDS` (24 s) is transcribed in overlapping 24 s windows (6 s overlap), kept in full, and de-duplicated (`_dedup_segments` drops copies overlapping >50 % of the shorter, keeping the fuller one). Chunks stay well under the ~32 s truncation point so none truncates its own tail, and the overlap means any utterance straddling a cut is transcribed whole in at least one chunk — a first hard-seam scheme (30 s/5 s) left an ~8 s hole at the boundary when a chunk dropped its tail, since fixed. Segment + word timestamps are offset onto the global timeline; ASR logs a coverage warning if the transcript still ends >3 s before the audio. Window/dedup/offset logic unit-tested (incl. a no-gap-across-seam case); the NeMo call path still needs a real-hardware re-run to confirm full, gap-free coverage.
 - [x] **Robust Windows capture backend.** `soundcard`'s WASAPI shared-mode capture asserted on some devices' mix format (`wFormatTag == 0xFFFE`) and failed on pro/USB interfaces like the Focusrite Scarlett (hit on real hardware 2026-09-13). Done: (a) mic is now captured via `sounddevice`/PortAudio (already a `[capture]` dep); soundcard is used only for system-output loopback (PortAudio can't do loopback, soundcard can't be swapped out for it). (b) Each channel records at its device's **native sample rate** and is downmixed + resampled to 16 kHz on write. (c) New `hearhere devices` command lists input names (`[capture].mic_device`) and output names (`[capture].output_device`). ✅ Verified on real Windows hardware on two machines; the pure param-selection logic (`_mic_stream_params`) and error paths are unit-tested on top.
 - [x] Choose & add HearHere's own license file — **MIT**, see `LICENSE`.

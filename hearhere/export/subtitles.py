@@ -1,7 +1,7 @@
 """Subtitle exports: SRT (``transcript.srt``) and WebVTT (``transcript.vtt``).
 
 SRT ships in Batch 1; the VTT renderer is here too (wired into config as an
-export format in Batch 6).
+export format in Batch 5).
 """
 
 from __future__ import annotations

@@ -1,1 +1,1 @@
-"""ASR engines (Parakeet/NeMo, remote client)."""
+"""ASR engines (Parakeet/NeMo)."""

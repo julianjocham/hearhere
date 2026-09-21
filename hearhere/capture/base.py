@@ -148,8 +148,8 @@ def create_audio_capture(
 ) -> AudioCapture:
     """Return the capture adapter for the current OS.
 
-    Development priority is Windows -> macOS -> Linux (see README); the
-    non-Windows adapters arrive in later batches.
+    Windows (WASAPI loopback) and Linux (PipeWire/PulseAudio sink monitor) are
+    implemented; macOS still needs a virtual-device adapter and raises.
     """
     kwargs: dict[str, Any] = dict(
         mic_device=mic_device,

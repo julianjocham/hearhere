@@ -6,10 +6,9 @@ and uvicorn are imported lazily so the rest of HearHere works without the
 ``[webui]`` extra.
 
 .. note::
-   Like :mod:`hearhere.remote.worker`, this module deliberately avoids
-   ``from __future__ import annotations``: FastAPI resolves endpoint parameter
-   annotations at route registration and the web-stack types are imported lazily
-   inside :func:`create_app`. Request-body models are ordinary module globals so
+   This module deliberately avoids ``from __future__ import annotations``:
+   FastAPI resolves endpoint parameter annotations at route registration and the
+   web-stack types are imported lazily inside :func:`create_app`. Request-body models are ordinary module globals so
    FastAPI can resolve them. Runtime ``X | None`` unions are fine on 3.10+.
 """
 
