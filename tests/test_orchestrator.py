@@ -92,3 +92,70 @@ def test_meeting_json_roundtrips_after_process(tmp_path):
     meeting = process_meeting(paths.root, cfg, asr=FakeASR(), title="Weekly Sync")
     reloaded = artifacts.read_meeting(paths)
     assert reloaded == meeting
+
+
+# --- a failed recording points at salvageable audio, but only if it exists --
+
+
+class _FailingCapture:
+    """Stands in for a platform adapter whose stop() raises.
+
+    ``writes`` mirrors the two behaviours in the tree: LinuxCapture persists
+    both channels before raising, WindowsCapture raises first.
+    """
+
+    def __init__(self, self_wav, others_wav, *, writes: bool, **kwargs):
+        self.self_wav, self.others_wav, self._writes = self_wav, others_wav, writes
+
+    def start(self):
+        pass
+
+    def stop(self):
+        from hearhere.capture.base import CaptureError
+
+        if self._writes:
+            self.self_wav.write_bytes(b"")
+            self.others_wav.write_bytes(b"")
+        raise CaptureError("the mic died mid-meeting")
+
+
+def _run_failing_record(tmp_path, monkeypatch, *, writes: bool):
+    from hearhere.capture import base as capture_base
+    from hearhere.pipeline.orchestrator import record_meeting
+
+    monkeypatch.setattr(
+        capture_base,
+        "create_audio_capture",
+        lambda self_wav, others_wav, **kw: _FailingCapture(
+            self_wav, others_wav, writes=writes
+        ),
+    )
+    monkeypatch.setattr("builtins.input", lambda *a: "")
+    cfg = Config()
+    cfg.general.storage_dir = tmp_path
+    return record_meeting(cfg, "Weekly Sync")
+
+
+def test_capture_failure_reports_where_the_partial_audio_is(tmp_path, monkeypatch):
+    from hearhere.capture.base import CaptureError
+
+    with pytest.raises(CaptureError) as err:
+        _run_failing_record(tmp_path, monkeypatch, writes=True)
+    # Both WAVs are on disk, so the user can salvage the healthy channel.
+    assert err.value.meeting_dir is not None
+    # cli.record tells the user to run `hearhere process <dir>`; that only works
+    # if the audio is really there.
+    recovered = artifacts.resolve_meeting(err.value.meeting_dir)
+    assert recovered.self_wav.is_file() and recovered.others_wav.is_file()
+
+
+def test_capture_failure_promises_nothing_when_no_audio_was_written(
+    tmp_path, monkeypatch
+):
+    # WindowsCapture.stop() raises before writing, so advertising a recoverable
+    # folder here would send the user to `hearhere process` on an empty dir.
+    from hearhere.capture.base import CaptureError
+
+    with pytest.raises(CaptureError) as err:
+        _run_failing_record(tmp_path, monkeypatch, writes=False)
+    assert err.value.meeting_dir is None

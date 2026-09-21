@@ -56,6 +56,7 @@ class ComputeConfig(BaseModel):
 
 
 class CaptureConfig(BaseModel):
+    # "none" (Linux) = this machine has no microphone; record system output only.
     mic_device: str = "default"
     output_device: str = "default"
     sample_rate: int = 16000

@@ -60,9 +60,9 @@ Legend: 🎯 milestone · ⛓️ depends on the batch above · 🧪 has an expli
 
 ## Batch 4 — Linux support ⛓️ (Phase 4)
 
-- [ ] `capture/linux.py`: mic + default-sink `.monitor` capture via PipeWire/PulseAudio.
-- [ ] Device discovery/selection for non-default devices.
-- [ ] 🧪 Record + process a meeting end-to-end on Linux.
+- [x] `capture/linux.py`: mic + default-sink `.monitor` capture via PipeWire/PulseAudio. *(Both channels go through `soundcard` (libpulse), which enumerates each sink's monitor as a loopback source — symmetric with, and simpler than, the Windows split. `create_audio_capture` now dispatches Linux to `LinuxCapture`.)*
+- [x] Device discovery/selection for non-default devices. *(`hearhere devices` is now platform-aware: on Linux it lists soundcard sources + sinks — the names `[capture].mic_device` / `output_device` actually accept — instead of sounddevice's raw ALSA `hw:` names.)*
+- [x] 🧪 Record + process a meeting end-to-end on Linux. *(Capture path verified on real PipeWire hardware on 2026-09-17: a 440 Hz tone played to the default sink was captured on the `others` channel at the exact expected amplitude, mic on `self`, both written as 16 kHz mono WAV. Unit tests cover the error paths and empty-recording case. Full transcribe run still depends on the `[asr]` model download.)*
 
 ---
 

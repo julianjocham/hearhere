@@ -26,6 +26,7 @@ jobs:
       # The asr/diarization/capture extras pull torch, NeMo and host audio
       # libraries — far too heavy for CI. Those engines are imported lazily and
       # their tests stub them out, so the pure-logic suite runs without them.
+      # ([dev] does pull numpy/soundfile, so the WAV-writing tests still run.)
       - name: Install
         run: |
           python -m pip install --upgrade pip

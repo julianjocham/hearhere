@@ -51,6 +51,11 @@ webui = [          # Batch 7: local web UI (browse/review/re-export in the brows
     "uvicorn>=0.29",
 ]
 dev = [
+    # numpy/soundfile are the light half of [capture] (no torch, no host audio
+    # libs) and several capture tests importorskip on them — without these the
+    # stop()/WAV-writing regression guards silently skip in CI.
+    "numpy>=1.24",
+    "soundfile>=0.12",
     "pytest>=8.0",
 ]
 

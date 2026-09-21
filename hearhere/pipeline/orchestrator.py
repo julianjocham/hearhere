@@ -50,7 +50,7 @@ def record_meeting(
     Returns the meeting paths; call :func:`process_meeting` next (the CLI's
     ``record`` command does both).
     """
-    from ..capture.base import create_audio_capture  # noqa: PLC0415
+    from ..capture.base import CaptureError, create_audio_capture  # noqa: PLC0415
 
     when = when or datetime.now()
     paths = artifacts.create_meeting_dir(config.general.storage_dir, title, when)
@@ -73,7 +73,20 @@ def record_meeting(
             input("Recording… press Enter to stop.\n")
         except (KeyboardInterrupt, EOFError):
             pass
-        result = capture.stop()
+        try:
+            result = capture.stop()
+        except CaptureError as exc:
+            # Some adapters write both channels before raising, so a failure on
+            # one leaves the other's audio on disk; carry the folder out with
+            # the error, or the CLI only echoes "re-record" and the recovered
+            # audio is unreachable. Others (WindowsCapture) raise first — check
+            # the files rather than trusting the adapter to have written them.
+            if paths.self_wav.is_file() and paths.others_wav.is_file():
+                exc.meeting_dir = paths.root
+                log.error("Recording failed; partial audio in %s: %s", paths.root, exc)
+            else:
+                log.error("Recording failed, no audio written: %s", exc)
+            raise
         log.info("Recorded %.1fs", result.duration)
     finally:
         remove_meeting_file_handler(handler)

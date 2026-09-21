@@ -18,8 +18,13 @@ token = ""                  # bearer token for the worker; or set HEARHERE_REMOT
 
 [capture]
 # Device selection; "default" uses the OS default devices.
+# Run `hearhere devices` to list the exact names this platform accepts.
 mic_device    = "default"
-output_device = "default"   # the loopback/monitor/virtual device
+# The system-output ("others") device. On Windows this is the render device
+# whose WASAPI loopback is captured; on Linux it's the sink whose ".monitor"
+# source is captured (name the sink, e.g. "sof-soundwire Headphones", not the
+# monitor). "default" follows the OS default output device.
+output_device = "default"
 sample_rate   = 16000       # resampled to 16k if the device differs
 
 [asr]

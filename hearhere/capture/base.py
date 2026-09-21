@@ -35,7 +35,14 @@ class CaptureError(RuntimeError):
     Raised loudly so the caller never mistakes a failed capture for a silent
     meeting — an empty WAV would otherwise crash the ASR stage with a cryptic
     error much later.
+
+    ``meeting_dir`` is set when the failure surfaced *after* the adapter had
+    already written what it captured — a one-channel failure still leaves the
+    healthy channel on disk — so the caller can point the user at the
+    salvageable recording instead of telling them to start over.
     """
+
+    meeting_dir: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -160,9 +167,7 @@ def create_audio_capture(
             "(it will use BlackHole or a similar virtual device)."
         )
     if platform.startswith("linux"):
-        raise NotImplementedError(
-            "Linux audio capture is not implemented yet "
-            "(it will use a PipeWire/PulseAudio monitor source). "
-            "Note: WSL2 has no direct audio access — record on the host OS."
-        )
+        from .linux import LinuxCapture  # noqa: PLC0415
+
+        return LinuxCapture(self_wav, others_wav, **kwargs)
     raise NotImplementedError(f"No audio capture adapter for platform {platform!r}.")

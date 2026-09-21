@@ -11,9 +11,10 @@ No cloud. No accounts. No audio ever leaves your machine (unless you *explicitly
 Powered by NVIDIA's [**parakeet-tdt-0.6b-v3**](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) multilingual speech-to-text model.
 
 > **Status:** Working. The Windows record → transcribe path has been exercised
-> end to end on real audio hardware on two machines. Recording is
-> **Windows-only** today — macOS and Linux capture are the remaining gaps;
-> everything else (processing, diarization, summaries, exports, the web UI, the
+> end to end on real audio hardware on two machines. **Linux** recording
+> (PipeWire/PulseAudio sink-monitor loopback) is implemented and the capture path
+> is verified on real hardware; **macOS** capture is the remaining gap.
+> Everything else (processing, diarization, summaries, exports, the web UI, the
 > remote worker) is cross-platform.
 > [INSTRUCTIONS.md](INSTRUCTIONS.md#troubleshooting) covers the rough edges that
 > did turn up, mostly around audio-device selection.
@@ -144,10 +145,11 @@ Capturing **system output** ("what you hear") is OS-specific and is the only gen
 - **System output:** macOS cannot capture output directly; requires a **virtual audio device** the user installs once, e.g. [BlackHole](https://github.com/ExistentialAudio/BlackHole). Route output through a Multi-Output Device (speakers + BlackHole) and capture BlackHole as an input.
 - README/installer must document this setup step clearly. (macOS 14.4+ has `CoreAudio` process-tap APIs as a future no-virtual-device path.)
 
-### Linux (priority 3) — PipeWire / PulseAudio monitor
-- **Mic:** PulseAudio/PipeWire source.
-- **System output:** capture the `.monitor` source of the default sink (native loopback, no extra software).
-- Likely libs: `sounddevice`/`pulsectl` or PipeWire directly.
+### Linux (priority 3) — PipeWire / PulseAudio monitor ✅ *implemented*
+- **Mic:** the default (or configured) PulseAudio/PipeWire source.
+- **System output:** the `.monitor` source of the default (or configured) sink — native loopback of exactly what you hear, no virtual cable and no extra software.
+- **Backend:** both channels go through [`soundcard`](https://github.com/bastibe/SoundCard), which talks to PulseAudio/PipeWire (`pipewire-pulse`) directly and enumerates each sink's monitor as a loopback source. Unlike Windows there's no need to split the mic onto `sounddevice` — PulseAudio has no WASAPI-style format pitfalls, and `sounddevice` on Linux binds to raw ALSA `hw:` devices, bypassing PipeWire and its defaults.
+- **Requirements:** a running PipeWire (or PulseAudio) session and the system `libpulse0` package (`sudo apt install libpulse0`) — `soundcard` talks to PulseAudio directly and does not use PortAudio here; then `pip install "hearhere[capture]"`. Run `hearhere devices` to list source and sink names for `[capture].mic_device` / `output_device`.
 
 > **WSL2 note:** WSL2 has no direct audio device access by default. HearHere on WSL2 would need audio bridged from the Windows host (or run on the Windows side natively). Treat WSL2 as a dev environment, not a target.
 
@@ -462,7 +464,7 @@ Shipping implementations: `parakeet_nemo` + `remote` (ASR), `pyannote` (diarizat
 **Remaining:**
 
 - ⬜ **macOS capture.** BlackHole / virtual-device capture + setup docs; MPS device support.
-- ⬜ **Linux capture.** PipeWire/PulseAudio monitor capture.
+- ✅ **Linux capture.** PipeWire/PulseAudio sink-monitor loopback via `soundcard` (implemented; capture path verified on real hardware).
 - ⬜ **llama.cpp/GGUF summarizer** as an Ollama-free LLM backend.
 
 See [TODO.md](TODO.md) for the detailed breakdown.
@@ -503,7 +505,7 @@ See [TODO.md](TODO.md) for the detailed breakdown.
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
 the dev setup (`pip install -e ".[remote,webui,dev]"` runs the whole test suite
 without downloading a single model), the project conventions, and what a good PR
-looks like. The biggest open items are **macOS and Linux capture** — see
+looks like. The biggest open item is **macOS capture** — see
 [TODO.md](TODO.md).
 
 ---
